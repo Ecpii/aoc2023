@@ -1,24 +1,5 @@
-use std::{
-    cmp::max,
-    fs,
-    path::{Path, PathBuf},
-};
-
-fn get_input_dir() -> PathBuf {
-    let current_day: &str = Path::new(file!()).file_stem().unwrap().to_str().unwrap();
-
-    let input_dir: PathBuf = Path::new(file!())
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("inputs")
-        .join(current_day);
-    input_dir
-}
-
+use aoc2023::utils::read_input_file;
+use std::cmp::max;
 struct CubeCount {
     pub red: usize,
     pub green: usize,
@@ -49,7 +30,7 @@ impl CubeCount {
         res
     }
 
-    pub fn merge(&self, other: &CubeCount) -> CubeCount {
+    pub fn merged_with(&self, other: &CubeCount) -> CubeCount {
         CubeCount {
             red: (max(self.red, other.red)),
             green: (max(self.green, other.green)),
@@ -63,14 +44,12 @@ impl CubeCount {
 }
 
 fn main() {
-    let filename = get_input_dir().join("input.txt");
-    let contents = fs::read_to_string(filename).expect("opening file failed");
+    let contents = read_input_file(file!(), "input.txt");
     let part1 = part1(contents);
-    println!("part 1: {}", part1);
-    let filename = get_input_dir().join("input.txt");
-    let contents = fs::read_to_string(filename).expect("opening file failed");
+    println!("part 1: {}", part1); // 2207
+    let contents = read_input_file(file!(), "input.txt");
     let part2 = part2(contents);
-    println!("part 2: {}", part2)
+    println!("part 2: {}", part2); // 62241
 }
 
 fn part1(contents: String) -> u32 {
@@ -113,7 +92,7 @@ fn part2(contents: String) -> usize {
                 green: 0,
                 blue: 0,
             },
-            |accumulator, game_round| accumulator.merge(&CubeCount::from_str(game_round)),
+            |accumulator, game_round| accumulator.merged_with(&CubeCount::from_str(game_round)),
         );
         result += miniminum_set.get_power()
     }
@@ -123,22 +102,17 @@ fn part2(contents: String) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::{get_input_dir, part1, part2};
-    use std::fs;
+    use crate::{part1, part2, read_input_file};
 
     #[test]
     fn p1sample01() {
-        let filename = get_input_dir().join("sample.txt");
-        let contents = fs::read_to_string(filename).expect("opening file failed");
-        println!("{:?}", contents);
+        let contents = read_input_file(file!(), "sample.txt");
         let part_1 = part1(contents);
         assert_eq!(part_1, 8);
     }
     #[test]
     fn p2sample01() {
-        let filename = get_input_dir().join("sample.txt");
-        let contents = fs::read_to_string(filename).expect("opening file failed");
-        println!("{:?}", contents);
+        let contents = read_input_file(file!(), "sample.txt");
         let part_2 = part2(contents);
         assert_eq!(part_2, 2286);
     }

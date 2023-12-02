@@ -60,7 +60,7 @@ fn solve(contents: String) {
             // }
         });
 
-    println!("{:?}", part1);
+    println!("{:?}", part1); // 55538
 
     println!("begin part 2");
 
@@ -100,7 +100,7 @@ fn solve(contents: String) {
         calibration_sum + first_digit * 10 + last_digit
     });
 
-    println!("{:?}", part2);
+    println!("{:?}", part2); // 54875
 }
 
 #[cfg(test)]

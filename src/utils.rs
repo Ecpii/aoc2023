@@ -1,0 +1,28 @@
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+/// Reads the corresponding `input_name` file for this day from the `inputs` directory.
+///
+/// `self_name` should be a call to the `file!()` macro from the calling file.
+///
+/// # Panics
+///
+/// Panics if the file in `file_path` has no name or is not nested two directories down from
+/// the directory containing the `inputs` folder.
+pub fn read_input_file(self_name: &str, input_name: &str) -> String {
+    let current_day: &str = Path::new(self_name)
+        .file_stem()
+        .and_then(|x| x.to_str())
+        .expect("Calling file should have a name of form dayXX.rs");
+
+    let input_dir: PathBuf = Path::new(self_name)
+        .ancestors()
+        .nth(3)
+        .expect("Calling file should be located 3 directories down")
+        .join("inputs")
+        .join(current_day);
+    let input_filename = input_dir.join(input_name);
+    fs::read_to_string(input_filename).expect("Opening input file failed")
+}
