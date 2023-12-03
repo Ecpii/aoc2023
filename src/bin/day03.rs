@@ -76,9 +76,87 @@ fn part1(contents: String) -> usize {
     res
 }
 
+fn resolve_number(line: &str, index: usize) -> Option<usize> {
+    if !line.chars().nth(index).is_some_and(|x| x.is_ascii_digit()) {
+        return None;
+    }
+
+    let (mut left, mut right) = (index, index);
+
+    let mut left_iter = line.chars().rev().skip(line.len() - index);
+    while left_iter.next().is_some_and(|x| x.is_ascii_digit()) {
+        left -= 1;
+    }
+
+    let mut right_iter = line.chars().skip(index + 1);
+    while right_iter.next().is_some_and(|x| x.is_ascii_digit()) {
+        right += 1;
+    }
+
+    let res: usize = line[left..right + 1].parse().unwrap();
+    Some(res)
+}
+
 fn part2(contents: String) -> usize {
-    contents.split('\n').for_each(|_| ());
-    0
+    let mut res = 0;
+    let lines: Vec<_> = contents.split('\n').take_while(|x| !x.is_empty()).collect();
+    for (line_num, line) in lines.iter().enumerate() {
+        for (index, char) in line.char_indices() {
+            if char != '*' {
+                continue;
+            }
+
+            let mut neighboring_part_nums = Vec::with_capacity(6);
+            if let Some(upper_line) = lines.get(line_num.wrapping_sub(1)) {
+                if upper_line.chars().nth(index).unwrap().is_ascii_digit() {
+                    if let Some(num) = resolve_number(upper_line, index) {
+                        neighboring_part_nums.push(num);
+                    }
+                } else {
+                    if let Some(num) = resolve_number(upper_line, index.wrapping_sub(1)) {
+                        neighboring_part_nums.push(num);
+                    }
+                    if let Some(num) = resolve_number(upper_line, index + 1) {
+                        neighboring_part_nums.push(num);
+                    }
+                }
+            }
+            if let Some(num) = resolve_number(line, index.wrapping_sub(1)) {
+                neighboring_part_nums.push(num);
+            }
+            if let Some(num) = resolve_number(line, index + 1) {
+                neighboring_part_nums.push(num);
+            }
+            if let Some(lower_line) = lines.get(line_num + 1) {
+                if lower_line.chars().nth(index).unwrap().is_ascii_digit() {
+                    if let Some(num) = resolve_number(lower_line, index) {
+                        neighboring_part_nums.push(num);
+                    }
+                } else {
+                    if let Some(num) = resolve_number(lower_line, index.wrapping_sub(1)) {
+                        neighboring_part_nums.push(num);
+                    }
+                    if let Some(num) = resolve_number(lower_line, index + 1) {
+                        neighboring_part_nums.push(num);
+                    }
+                }
+            }
+
+            if neighboring_part_nums.len() != 2 {
+                continue;
+            }
+            println!(
+                "found neighboring partition numbers {:?}",
+                neighboring_part_nums
+            );
+            println!(
+                "found gear ratio {}",
+                neighboring_part_nums[0] * neighboring_part_nums[1]
+            );
+            res += neighboring_part_nums[0] * neighboring_part_nums[1];
+        }
+    }
+    res
 }
 
 #[cfg(test)]
@@ -86,19 +164,17 @@ mod tests {
     use crate::{part1, part2, read_input_file};
 
     const P1SAMPLE01_ANSWER: usize = 4361;
-    const P2SAMPLE01_ANSWER: usize = 0;
+    const P2SAMPLE01_ANSWER: usize = 467835;
 
     #[test]
     fn p1sample01() {
         let contents = read_input_file(file!(), "sample.txt");
-        println!("{:?}", contents);
         let res = part1(contents);
         assert_eq!(res, P1SAMPLE01_ANSWER);
     }
     #[test]
     fn p2sample01() {
         let contents = read_input_file(file!(), "sample.txt");
-        println!("{:?}", contents);
         let res = part2(contents);
         assert_eq!(res, P2SAMPLE01_ANSWER);
     }

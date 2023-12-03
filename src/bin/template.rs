@@ -29,14 +29,12 @@ mod tests {
     #[test]
     fn p1sample01() {
         let contents = read_input_file(file!(), "sample.txt");
-        println!("{:?}", contents);
         let res = part1(contents);
         assert_eq!(res, P1SAMPLE01_ANSWER);
     }
     #[test]
     fn p2sample01() {
         let contents = read_input_file(file!(), "sample.txt");
-        println!("{:?}", contents);
         let res = part2(contents);
         assert_eq!(res, P2SAMPLE01_ANSWER);
     }
