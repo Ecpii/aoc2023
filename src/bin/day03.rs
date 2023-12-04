@@ -145,14 +145,14 @@ fn part2(contents: String) -> usize {
             if neighboring_part_nums.len() != 2 {
                 continue;
             }
-            println!(
-                "found neighboring partition numbers {:?}",
-                neighboring_part_nums
-            );
-            println!(
-                "found gear ratio {}",
-                neighboring_part_nums[0] * neighboring_part_nums[1]
-            );
+            // println!(
+            //     "found neighboring partition numbers {:?}",
+            //     neighboring_part_nums
+            // );
+            // println!(
+            //     "found gear ratio {}",
+            //     neighboring_part_nums[0] * neighboring_part_nums[1]
+            // );
             res += neighboring_part_nums[0] * neighboring_part_nums[1];
         }
     }
