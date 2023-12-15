@@ -30,7 +30,11 @@ fn part1(contents: String) -> usize {
                 owned_numbers.insert(x);
             });
 
-            if matches!(winning_numbers.intersection(&owned_numbers).next(), None) {
+            if winning_numbers
+                .intersection(&owned_numbers)
+                .next()
+                .is_none()
+            {
                 return total_points;
             }
 
