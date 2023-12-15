@@ -6,8 +6,15 @@ version = 3
 name = "aoc2023"
 version = "0.1.0"
 dependencies = [
+ "array2d",
  "itertools",
 ]
+
+[[package]]
+name = "array2d"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94ad5242bab1ff9b496507236c8b8f47d5ba476a37aade93b2ebe60093b3c065"
 
 [[package]]
 name = "either"

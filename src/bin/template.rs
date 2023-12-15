@@ -9,13 +9,13 @@ fn main() {
     println!("part 2: {}", part2)
 }
 
-fn part1(contents: String) -> usize {
-    contents.split('\n').for_each(|_| ());
+fn part1(contents: String) -> isize {
+    let _lines = contents.split('\n').take_while(|x| !x.is_empty());
     0
 }
 
-fn part2(contents: String) -> usize {
-    contents.split('\n').for_each(|_| ());
+fn part2(contents: String) -> isize {
+    let _lines = contents.split('\n').take_while(|x| !x.is_empty());
     0
 }
 
@@ -23,19 +23,18 @@ fn part2(contents: String) -> usize {
 mod tests {
     use crate::{part1, part2, read_input_file};
 
-    const P1SAMPLE01_ANSWER: usize = 0;
-    const P2SAMPLE01_ANSWER: usize = 0;
+    const SAMPLE_ANSWERS: [(isize, isize); 1] = [(0, 0)];
 
     #[test]
-    fn p1sample01() {
+    fn sample01p1() {
         let contents = read_input_file(file!(), "sample.txt");
         let res = part1(contents);
-        assert_eq!(res, P1SAMPLE01_ANSWER);
+        assert_eq!(res, SAMPLE_ANSWERS[0].0);
     }
     #[test]
-    fn p2sample01() {
+    fn sample01p2() {
         let contents = read_input_file(file!(), "sample.txt");
         let res = part2(contents);
-        assert_eq!(res, P2SAMPLE01_ANSWER);
+        assert_eq!(res, SAMPLE_ANSWERS[0].1);
     }
 }
