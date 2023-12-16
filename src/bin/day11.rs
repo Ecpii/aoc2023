@@ -67,8 +67,8 @@ fn part1(contents: String) -> isize {
             .iter()
             .take_while(|x| **x < star.x)
             .count();
-        star.x += num_prev_expanded_cols * (1000000 - 1);
-        star.y += num_prev_expanded_lines + (1000000 - 1);
+        star.x += num_prev_expanded_cols;
+        star.y += num_prev_expanded_lines;
     }
 
     let mut res = 0;
@@ -83,8 +83,47 @@ fn part1(contents: String) -> isize {
 }
 
 fn part2(contents: String) -> isize {
-    let _lines = contents.split('\n').take_while(|x| !x.is_empty());
-    0
+    let lines: Vec<_> = contents.split('\n').take_while(|x| !x.is_empty()).collect();
+    let mut stars: Vec<Coord> = Vec::new();
+
+    for (y, line) in lines.iter().enumerate() {
+        for (x, char) in line.chars().enumerate() {
+            if char == '#' {
+                stars.push(Coord { x, y });
+            }
+        }
+    }
+
+    let blank_line_indices: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.chars().all(|x| x == '.'))
+        .map(|(index, _)| index)
+        .collect();
+    let blank_col_indices: Vec<usize> = get_blank_col_indices(lines);
+
+    for star in stars.iter_mut() {
+        let num_prev_expanded_lines = blank_line_indices
+            .iter()
+            .take_while(|y| **y < star.y)
+            .count();
+        let num_prev_expanded_cols = blank_col_indices
+            .iter()
+            .take_while(|x| **x < star.x)
+            .count();
+        star.x += num_prev_expanded_cols * (1000000 - 1);
+        star.y += num_prev_expanded_lines * (1000000 - 1);
+    }
+
+    let mut res = 0;
+
+    for (index, star) in stars.iter().enumerate() {
+        for other_star in stars.iter().skip(index + 1) {
+            res += star.distance_from(*other_star)
+        }
+    }
+
+    res as isize
 }
 
 #[cfg(test)]
