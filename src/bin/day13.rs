@@ -4,7 +4,7 @@ use array2d::Array2D;
 fn main() {
     let contents = read_input_file(file!(), "input.txt");
     let part1 = part1(contents);
-    println!("part 1: {}", part1);
+    println!("part 1: {}", part1); // 33728
     let contents = read_input_file(file!(), "input.txt");
     let part2 = part2(contents);
     println!("part 2: {}", part2)
@@ -12,6 +12,10 @@ fn main() {
 
 fn find_mirror_row(pattern: &Array2D<char>) -> Option<usize> {
     (1..pattern.num_rows()).find(|&y| check_mirror_row(pattern, y))
+}
+
+fn find_mirror_row_excluding(pattern: &Array2D<char>, excluded_index: usize) -> Option<usize> {
+    (1..pattern.num_rows()).find(|&y| y != excluded_index && check_mirror_row(pattern, y))
 }
 
 fn check_mirror_row(pattern: &Array2D<char>, row_index: usize) -> bool {
@@ -39,6 +43,11 @@ fn check_mirror_row(pattern: &Array2D<char>, row_index: usize) -> bool {
 fn find_mirror_col(pattern: &Array2D<char>) -> Option<usize> {
     (1..pattern.num_columns()).find(|&x| check_mirror_col(pattern, x))
 }
+
+fn find_mirror_col_excluding(pattern: &Array2D<char>, excluded_index: usize) -> Option<usize> {
+    (1..pattern.num_columns()).find(|&x| x != excluded_index && check_mirror_col(pattern, x))
+}
+
 fn check_mirror_col(pattern: &Array2D<char>, col_index: usize) -> bool {
     let mut backtrack_index = col_index - 1;
     let mut forward_index = col_index;
@@ -86,8 +95,50 @@ fn part1(contents: String) -> isize {
 }
 
 fn part2(contents: String) -> isize {
-    let _lines = contents.split('\n').take_while(|x| !x.is_empty());
-    0
+    let patterns = contents.split("\n\n").take_while(|x| !x.is_empty());
+    let mut res = 0;
+    for raw_pattern in patterns {
+        let height = raw_pattern.matches('\n').count() + 1;
+        let width = raw_pattern.find('\n').unwrap();
+        let pattern = Array2D::from_iter_row_major(
+            raw_pattern.split('\n').flat_map(|x| x.chars()),
+            height,
+            width,
+        )
+        .expect("Creating 2D array for pattern failed!");
+
+        let original_reflection_score = if let Some(mirror_row) = find_mirror_row(&pattern) {
+            mirror_row * 100
+        } else if let Some(mirror_col) = find_mirror_col(&pattern) {
+            mirror_col
+        } else {
+            panic!("No original reflection line found!")
+        };
+
+        for (y, x) in pattern.indices_row_major() {
+            let mut altered_pattern = pattern.clone();
+            let original_marking = pattern.get(y, x).unwrap();
+            let altered_marking = if *original_marking == '#' { '.' } else { '#' };
+            altered_pattern.set(y, x, altered_marking).unwrap();
+
+            let new_reflection_score = if let Some(mirror_row) =
+                find_mirror_row_excluding(&altered_pattern, original_reflection_score / 100)
+            {
+                mirror_row * 100
+            } else if let Some(mirror_col) =
+                find_mirror_col_excluding(&altered_pattern, original_reflection_score)
+            {
+                mirror_col
+            } else {
+                continue;
+            };
+            if new_reflection_score != original_reflection_score {
+                res += new_reflection_score;
+                break;
+            }
+        }
+    }
+    res as isize
 }
 
 #[cfg(test)]
@@ -116,6 +167,16 @@ mod tests {
             input_file: "sample.txt",
             part_num: 1,
             expected_out: 405,
+        }
+        .run()
+    }
+
+    #[test]
+    fn first_sample_part_two() {
+        Sample {
+            input_file: "sample.txt",
+            part_num: 2,
+            expected_out: 400,
         }
         .run()
     }
