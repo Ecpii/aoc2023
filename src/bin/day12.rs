@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::time::Instant;
 
 use aoc2023::utils::read_input_file;
 use array2d::Array2D;
@@ -8,8 +8,11 @@ fn main() {
     let part1 = part1(contents);
     println!("part 1: {}", part1);
     let contents = read_input_file(file!(), "input.txt");
+    let start = Instant::now();
     let part2 = part2(contents);
-    println!("part 2: {}", part2)
+    let duration = start.elapsed();
+    println!("Time elapsed for part 2: {:?}", duration); // 27.8925323 seconds fastest
+    println!("part 2: {}", part2) // 18716325559999
 }
 
 fn ways_to_fit(line: &str, group_size: usize) -> usize {
@@ -33,23 +36,27 @@ fn ways_to_fit(line: &str, group_size: usize) -> usize {
 }
 
 /// dp idea
-///                string length ->
-/// array length v 1 2 3 4 5 6 7 ....
-///              1
-///              2
-///              3
-///              4
-///              5
-/// each cell x,y should be equal to
-/// max(
-///    table[x - c, y - 1] * ways to fit c in s[x - c..x],
-///    table[x - c - 1, y - 1] * ways to fit c in s[x - c - 1..x],
-///    ...,
-///    table[0, y - 1] * ways to fit c in s[..x]
-/// )
+/// shoutout to eecs 281 for brining me this solution
+///                                       string index right bound (inclusive) ->
+/// array index right bound (inclusive) v 0 1 2 3 4 5 6 ....
+///                                     0
+///                                     1
+///                                     2
+///                                     3
+///                                     4
+/// each cell x,y should be equal to the number of ways to fit the [0..y + 1] elements of
+/// the array into the substring from 0 to x + 1
 ///
-/// where s is string
-/// where c is the len of n[y]
+/// to calculate, linearly scan through array values on the row above,
+/// let i be the x index while scanning
+/// if character at string index corresponding to i is '#', then the number of configurations
+/// must be less than or equal to the cell left of current cell,
+/// because any way of fitting the array into the substring would have to use that #
+/// in this case, any configurations we find are unique, and so we add to our running total
+/// [configurations at (y - 1, i)] * [ways to fit group size at y into substring from i + 2..]
+///
+/// actually theres no way i can give a good explanation for this sorry it just works
+///
 fn count_configurations(line: &str, group_sizes: Vec<usize>) -> usize {
     let width = line.len();
     let height = group_sizes.len();
@@ -62,17 +69,28 @@ fn count_configurations(line: &str, group_sizes: Vec<usize>) -> usize {
 
     for (y, current_group_size) in group_sizes.iter().enumerate().skip(1) {
         for x in 2..width {
-            let mut max_configs = 0;
+            let mut cur_configs = 0;
             for i in 0..x - 1 {
-                let previous = memo.get(y - 1, i).unwrap_or(&1);
-                if *previous == 0 || line.chars().nth(i + 1).unwrap() == '#' {
+                let mut lhs_ways = memo[(y - 1, i)];
+                if lhs_ways == 0 {
                     continue;
                 }
-                let test_window = &line[i + 2..x + 1];
-                let new_ways = ways_to_fit(test_window, *current_group_size);
-                max_configs = max(max_configs, previous * new_ways);
+
+                let last_lhs_char = line.chars().nth(i).unwrap();
+                if last_lhs_char != '#' {
+                    let previous_lhs_ways = memo.get(y - 1, i.wrapping_sub(1)).unwrap_or(&0);
+                    lhs_ways -= *previous_lhs_ways;
+                }
+
+                if lhs_ways == 0 || line.chars().nth(i + 1).unwrap() == '#' {
+                    continue;
+                }
+
+                let trailing = &line[i + 2..x + 1];
+                let trailing_ways = ways_to_fit(trailing, *current_group_size);
+                cur_configs += lhs_ways * trailing_ways;
             }
-            memo.set(y, x, max_configs).expect("Failed to update memo!");
+            memo.set(y, x, cur_configs).expect("Failed to update memo!");
         }
         // println!("{:?}", &memo.as_rows());
     }
@@ -92,15 +110,40 @@ fn part1(contents: String) -> isize {
             .map(|x| x.parse().unwrap())
             .collect();
         let line_configurations = count_configurations(spring_record, group_sizes);
-        dbg!(&line_configurations);
+        // dbg!(&line_configurations);
         res += line_configurations;
     }
     res as isize
 }
 
 fn part2(contents: String) -> isize {
-    let _lines = contents.split('\n').take_while(|x| !x.is_empty());
-    0
+    let lines = contents.split('\n').take_while(|x| !x.is_empty());
+    let mut res = 0;
+    for line in lines {
+        let mut line_splits = line.split(' ');
+        let spring_record = line_splits.next().unwrap();
+        let group_sizes: Vec<usize> = line_splits
+            .next()
+            .unwrap()
+            .split(',')
+            .map(|x| x.parse().unwrap())
+            .collect();
+
+        let mut unfolded_spring_record = String::from(spring_record);
+        let mut unfolded_group_sizes = Vec::with_capacity(group_sizes.len() * 5);
+        unfolded_group_sizes.extend(group_sizes.iter());
+
+        for _ in 0..4 {
+            unfolded_spring_record.push('?');
+            unfolded_spring_record.push_str(spring_record);
+            unfolded_group_sizes.extend(group_sizes.iter());
+        }
+        let line_configurations =
+            count_configurations(&unfolded_spring_record, unfolded_group_sizes);
+        // dbg!(&line_configurations);
+        res += line_configurations;
+    }
+    res as isize
 }
 
 #[cfg(test)]
@@ -162,6 +205,21 @@ mod tests {
             expected_out: 21,
         }
         .run()
+    }
+
+    #[test]
+    fn first_sample_part_2() {
+        Sample {
+            input_file: "sample.txt",
+            part_num: 2,
+            expected_out: 525152,
+        }
+        .run()
+    }
+
+    #[test]
+    fn all_question_marks() {
+        dbg!(part2("??????????????? 1,1,1,2,1".to_string()));
     }
 
     #[test]
