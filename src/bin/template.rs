@@ -53,7 +53,7 @@ mod tests {
     fn first_sample_part_two() {
         Sample {
             input_file: "sample.txt",
-            part_num: 1,
+            part_num: 2,
             expected_out: 0,
         }
         .run()
