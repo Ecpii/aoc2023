@@ -9,10 +9,22 @@ fn main() {
     println!("part 2: {}", part2)
 }
 
-fn part1(contents: String) -> isize {
-    let lines = contents.split('\n').take_while(|x| !x.is_empty());
-    let mut res = 0;
+fn hash(input: &str) -> usize {
+    let mut res: usize = 0;
+    for char in input.chars() {
+        res += char as usize;
+        res *= 17;
+        res &= 255;
+    }
     res
+}
+fn part1(contents: String) -> isize {
+    let clauses = contents.trim_end().split(',');
+    let mut res = 0;
+    for clause in clauses {
+        res += hash(clause);
+    }
+    res as isize
 }
 
 fn part2(contents: String) -> isize {
@@ -44,7 +56,7 @@ mod tests {
         Sample {
             input_file: "sample.txt",
             part_num: 1,
-            expected_out: 0,
+            expected_out: 1320,
         }
         .run()
     }
