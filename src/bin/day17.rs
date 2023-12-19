@@ -1,9 +1,12 @@
-use colored::{ColoredString, Colorize};
-use std::{cmp::Reverse, collections::BinaryHeap, time::Instant};
+use colored::Colorize;
+use std::{
+    cmp::{Ordering, Reverse},
+    collections::BinaryHeap,
+    time::Instant,
+};
 
-use aoc2023::utils::{pretty_print, read_2d_map, read_2d_map_to_u8, read_input_file};
+use aoc2023::utils::{pretty_print, read_2d_map_to_u8, read_input_file};
 use array2d::Array2D;
-use itertools::Itertools;
 
 fn main() {
     let contents = read_input_file(file!(), "input.txt");
@@ -86,7 +89,7 @@ impl From<Direction> for char {
 struct DijkstraEntry {
     pub min_heat_loss: usize,
     pub seen: bool,
-    pub source: Option<Coord>,
+    pub sources: Vec<Coord>,
 }
 
 impl DijkstraEntry {
@@ -94,7 +97,7 @@ impl DijkstraEntry {
         DijkstraEntry {
             min_heat_loss: usize::MAX,
             seen: false,
-            source: None,
+            sources: Vec::with_capacity(4),
         }
     }
 }
@@ -105,114 +108,163 @@ struct DistPair {
     pub coord: Coord,
 }
 
-// impl Ord for DistPair {
-//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-//         self.distance.cmp(&other.distance)
-//     }
-// }
-
-fn find_restricted_direction(
-    dijkstra_map: &Array2D<DijkstraEntry>,
-    coord: Coord,
-) -> Option<Direction> {
-    let mut seen_directions: Vec<Direction> = Vec::with_capacity(3);
-    let mut current_coord = coord;
-    for _ in 0..3 {
-        let DijkstraEntry { source, .. } = dijkstra_map[(current_coord.y, current_coord.x)];
-
-        seen_directions.push(source?.direction_to(&current_coord));
-        current_coord = source.unwrap();
-    }
-    if let Ok(res) = seen_directions.iter().all_equal_value() {
-        Some(*res)
-    } else {
-        None
-    }
+struct Solver {
+    map: Array2D<u8>,
+    dijkstra_map: Array2D<DijkstraEntry>,
+    closest_cities: BinaryHeap<Reverse<DistPair>>,
 }
 
-fn highlight_path(dijkstra_map: &Array2D<DijkstraEntry>, map: &Array2D<char>) {
-    let width = dijkstra_map.num_columns();
-    let height = dijkstra_map.num_rows();
-    let mut output_map: Array2D<ColoredString> = Array2D::from_iter_row_major(
-        map.elements_row_major_iter()
-            .map(|x| x.to_string().normal()),
-        height,
-        width,
-    )
-    .unwrap();
-    let mut current_coord = Coord {
-        y: height - 1,
-        x: width - 1,
-    };
-    let start = Coord { y: 0, x: 0 };
-    while current_coord != start {
-        let DijkstraEntry { source, .. } = dijkstra_map[(current_coord.y, current_coord.x)];
-        let Some(prev_coord) = source else { return };
-        let incoming_direction: char = prev_coord.direction_to(&current_coord).into();
-        output_map[(prev_coord.y, prev_coord.x)] = incoming_direction.to_string().bold().green();
-
-        current_coord = prev_coord;
+impl Solver {
+    fn new(map: Array2D<u8>) -> Solver {
+        let width = map.num_columns();
+        let height = map.num_rows();
+        let mut dijkstra_map = Array2D::filled_with(DijkstraEntry::new(), height, width);
+        dijkstra_map[(0, 0)].min_heat_loss = 0;
+        let mut closest_cities = BinaryHeap::new();
+        closest_cities.push(Reverse(DistPair {
+            min_heat_loss: 0,
+            coord: Coord { x: 0, y: 0 },
+        }));
+        Solver {
+            map,
+            dijkstra_map,
+            closest_cities,
+        }
     }
-    pretty_print(&output_map);
+
+    fn width(&self) -> usize {
+        self.map.num_columns()
+    }
+    fn height(&self) -> usize {
+        self.map.num_rows()
+    }
+
+    fn get(&self, c: &Coord) -> Option<&u8> {
+        self.map.get(c.y, c.x)
+    }
+    fn get_dijkstra(&self, c: &Coord) -> Option<&DijkstraEntry> {
+        self.dijkstra_map.get(c.y, c.x)
+    }
+    fn get_dijkstra_mut(&mut self, c: &Coord) -> Option<&mut DijkstraEntry> {
+        self.dijkstra_map.get_mut(c.y, c.x)
+    }
+    fn is_illegal_movement(&self, start: Coord, end: Coord) -> bool {
+        let end_direction = start.direction_to(&end);
+        let mut current_coord = start;
+        for _ in 0..3 {
+            let DijkstraEntry { sources, .. } = self.get_dijkstra(&current_coord).unwrap();
+
+            if sources.len() != 1 || sources[0].direction_to(&start) != end_direction {
+                return false;
+            }
+            current_coord = sources[0];
+        }
+        true
+    }
+
+    fn run_dijkstra(&mut self) {
+        while !self.closest_cities.is_empty() {
+            let Reverse(DistPair {
+                min_heat_loss,
+                coord,
+            }) = self.closest_cities.pop().unwrap();
+
+            let dijkstra_entry = self.get_dijkstra_mut(&coord).unwrap();
+            if dijkstra_entry.seen {
+                continue;
+            }
+            dijkstra_entry.seen = true;
+
+            for neighbor_coord in coord.cardinal_neighbors() {
+                let Some(&heat_loss) = self.get(&neighbor_coord) else {
+                    println!();
+                    continue;
+                };
+                if self.is_illegal_movement(coord, neighbor_coord) {
+                    println!();
+                    continue;
+                }
+
+                let neighbor = self.get_dijkstra_mut(&neighbor_coord).unwrap();
+                let new_heat_loss = min_heat_loss + (heat_loss as usize);
+                match new_heat_loss.cmp(&neighbor.min_heat_loss) {
+                    Ordering::Less => {
+                        neighbor.min_heat_loss = new_heat_loss;
+                        neighbor.sources.clear();
+                        neighbor.sources.push(coord);
+                        self.closest_cities.push(Reverse(DistPair {
+                            min_heat_loss: new_heat_loss,
+                            coord: neighbor_coord,
+                        }))
+                    }
+                    Ordering::Equal => {
+                        neighbor.sources.push(coord);
+                    }
+                    Ordering::Greater => (),
+                }
+            }
+        }
+    }
+
+    fn soft_reset_dijkstra(&mut self) {
+        self.dijkstra_map[(0, 0)].min_heat_loss = 0;
+        for i in 0..self.width() * self.height() {
+            let entry = self.dijkstra_map.get_mut_row_major(i).unwrap();
+            entry.seen = false;
+        }
+        self.closest_cities.push(Reverse(DistPair {
+            min_heat_loss: 0,
+            coord: Coord { x: 0, y: 0 },
+        }));
+    }
+    fn run(&mut self) -> isize {
+        self.run_dijkstra();
+        self.highlight_path();
+        // self.soft_reset_dijkstra();
+        // self.run_dijkstra();
+        // self.highlight_path();
+        self.dijkstra_map[(self.height() - 1, self.width() - 1)].min_heat_loss as isize
+    }
+    fn highlight_path(&self) {
+        let mut map = Array2D::from_iter_row_major(
+            self.map
+                .elements_row_major_iter()
+                .map(|x| x.to_string().normal()),
+            self.height(),
+            self.width(),
+        )
+        .unwrap();
+        let mut current_coord = Coord {
+            y: self.height() - 1,
+            x: self.width() - 1,
+        };
+        let start = Coord { y: 0, x: 0 };
+        while current_coord != start {
+            let DijkstraEntry { sources, .. } = self.get_dijkstra(&current_coord).unwrap();
+            if sources.is_empty() {
+                return;
+            }
+            let prev_coord = sources[0];
+            let incoming_direction: char = prev_coord.direction_to(&current_coord).into();
+            map[(prev_coord.y, prev_coord.x)] = incoming_direction.to_string().bold().green();
+
+            current_coord = prev_coord;
+        }
+        pretty_print(&map);
+    }
 }
 
 fn part1(contents: String) -> isize {
     let map = read_2d_map_to_u8(contents.clone());
-    let width = map.num_columns();
-    let height = map.num_rows();
-    let mut dijkstra_map = Array2D::filled_with(DijkstraEntry::new(), height, width);
-    dijkstra_map[(0, 0)].min_heat_loss = 0;
-    let mut closest_cities = BinaryHeap::new();
-    closest_cities.push(Reverse(DistPair {
-        min_heat_loss: 0,
-        coord: Coord { x: 0, y: 0 },
-    }));
+    let mut solver = Solver::new(map);
+    solver.run()
+    // let debug_map = read_2d_map(contents);
+    // highlight_path(&dijkstra_map, &debug_map);
 
-    while !closest_cities.is_empty() {
-        let Reverse(DistPair {
-            min_heat_loss,
-            coord,
-        }) = closest_cities.pop().unwrap();
-
-        if min_heat_loss == usize::MAX {
-            panic!("how?")
-        }
-
-        let dijkstra_entry = &mut dijkstra_map[(coord.y, coord.x)];
-        if dijkstra_entry.seen {
-            continue;
-        }
-        dijkstra_entry.seen = true;
-
-        let restricted_direction = find_restricted_direction(&dijkstra_map, coord);
-        for neighbor_coord in coord.cardinal_neighbors() {
-            let Some(heat_loss) = map.get(neighbor_coord.y, neighbor_coord.x) else {
-                continue;
-            };
-            if restricted_direction.is_some_and(|x| x == coord.direction_to(&neighbor_coord)) {
-                continue;
-            }
-
-            let neighbor = &mut dijkstra_map[(neighbor_coord.y, neighbor_coord.x)];
-            let new_heat_loss = min_heat_loss + (*heat_loss as usize);
-            if new_heat_loss < neighbor.min_heat_loss {
-                neighbor.min_heat_loss = new_heat_loss;
-                neighbor.source = Some(coord);
-                closest_cities.push(Reverse(DistPair {
-                    min_heat_loss: new_heat_loss,
-                    coord: neighbor_coord,
-                }))
-            }
-        }
-    }
-
-    let debug_map = read_2d_map(contents);
-    highlight_path(&dijkstra_map, &debug_map);
-
-    dijkstra_map[(height - 1, width - 1)].min_heat_loss as isize
+    // dijkstra_map[(height - 1, width - 1)].min_heat_loss as isize
 }
 
-fn part2(contents: String) -> isize {
+fn part2(_contents: String) -> isize {
     0
 }
 
@@ -242,6 +294,16 @@ mod tests {
             input_file: "sample.txt",
             part_num: 1,
             expected_out: 102,
+        }
+        .run()
+    }
+
+    #[test]
+    fn first_divergence_first_sample() {
+        Sample {
+            input_file: "sample2.txt",
+            part_num: 1,
+            expected_out: 34,
         }
         .run()
     }
