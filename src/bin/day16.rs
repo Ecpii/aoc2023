@@ -1,6 +1,7 @@
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
+    time::Instant,
 };
 
 use aoc2023::utils::{read_2d_map, read_input_file};
@@ -11,7 +12,10 @@ fn main() {
     let part1 = part1(contents);
     println!("part 1: {}", part1); // 8249
     let contents = read_input_file(file!(), "input.txt");
+    let start2 = Instant::now();
     let part2 = part2(contents);
+    let duration2 = start2.elapsed();
+    println!("Time elapsed for part 2: {:?}", duration2);
     println!("part 2: {}", part2)
 }
 

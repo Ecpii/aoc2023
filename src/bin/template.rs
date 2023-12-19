@@ -1,12 +1,20 @@
+use std::time::Instant;
+
 use aoc2023::utils::read_input_file;
 
 fn main() {
     let contents = read_input_file(file!(), "input.txt");
+    let start = Instant::now();
     let part1 = part1(contents);
+    let duration = start.elapsed();
     println!("part 1: {}", part1);
+    println!("part 1 took {:?}", duration);
     let contents = read_input_file(file!(), "input.txt");
+    let start2 = Instant::now();
     let part2 = part2(contents);
-    println!("part 2: {}", part2)
+    let duration2 = start2.elapsed();
+    println!("part 2: {}", part2);
+    println!("part 2 took {:?}", duration2);
 }
 
 fn part1(contents: String) -> isize {
