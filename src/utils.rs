@@ -3,6 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use array2d::Array2D;
+
 /// Reads the corresponding `input_name` file for this day from the `inputs` directory.
 ///
 /// `self_name` should be a call to the `file!()` macro from the calling file.
@@ -25,4 +27,11 @@ pub fn read_input_file(self_name: &str, input_name: &str) -> String {
         .join(current_day);
     let input_filename = input_dir.join(input_name);
     fs::read_to_string(input_filename).expect("Opening input file failed")
+}
+
+pub fn read_2d_map(contents: String) -> Array2D<char> {
+    let lines = contents.split('\n').take_while(|x| !x.is_empty());
+    let height = contents.matches('\n').count();
+    let width = contents.find('\n').unwrap();
+    Array2D::from_iter_row_major(lines.flat_map(|x| x.chars()), height, width).unwrap()
 }
