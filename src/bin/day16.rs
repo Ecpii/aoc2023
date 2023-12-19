@@ -1,6 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet},
+};
 
 use aoc2023::utils::{read_2d_map, read_input_file};
+use array2d::Array2D;
 
 fn main() {
     let contents = read_input_file(file!(), "input.txt");
@@ -94,15 +98,20 @@ impl Beam {
         Some(new_beam)
     }
 }
-
 fn part1(contents: String) -> isize {
     let map = read_2d_map(contents);
-    let mut energized_tiles: HashMap<Coord, HashSet<Direction>> = HashMap::new();
+    count_energized_tiles(
+        &map,
+        Beam {
+            position: Coord::new(0, 0),
+            direction: Direction::East,
+        },
+    )
+}
 
-    let mut beams: Vec<Beam> = vec![Beam {
-        position: Coord::new(0, 0),
-        direction: Direction::East,
-    }];
+fn count_energized_tiles(map: &Array2D<char>, starting_beam: Beam) -> isize {
+    let mut energized_tiles: HashMap<Coord, HashSet<Direction>> = HashMap::new();
+    let mut beams: Vec<Beam> = vec![starting_beam];
     while !beams.is_empty() {
         let mut future_beams: Vec<Beam> = Vec::new();
         let mut removed_beams: HashSet<Beam> = HashSet::new();
@@ -148,7 +157,59 @@ fn part1(contents: String) -> isize {
 }
 
 fn part2(contents: String) -> isize {
-    0
+    let map = read_2d_map(contents);
+    let mut max_energized_tiles = 0;
+    for x in 0..map.num_columns() {
+        max_energized_tiles = max(
+            count_energized_tiles(
+                &map,
+                Beam {
+                    position: Coord { x, y: 0 },
+                    direction: Direction::South,
+                },
+            ),
+            max_energized_tiles,
+        );
+        max_energized_tiles = max(
+            count_energized_tiles(
+                &map,
+                Beam {
+                    position: Coord {
+                        x,
+                        y: map.num_rows() - 1,
+                    },
+                    direction: Direction::North,
+                },
+            ),
+            max_energized_tiles,
+        );
+    }
+    for y in 0..map.num_rows() {
+        max_energized_tiles = max(
+            count_energized_tiles(
+                &map,
+                Beam {
+                    position: Coord { x: 0, y },
+                    direction: Direction::East,
+                },
+            ),
+            max_energized_tiles,
+        );
+        max_energized_tiles = max(
+            count_energized_tiles(
+                &map,
+                Beam {
+                    position: Coord {
+                        x: map.num_columns() - 1,
+                        y,
+                    },
+                    direction: Direction::West,
+                },
+            ),
+            max_energized_tiles,
+        );
+    }
+    max_energized_tiles
 }
 
 #[cfg(test)]
@@ -186,7 +247,7 @@ mod tests {
         Sample {
             input_file: "sample.txt",
             part_num: 2,
-            expected_out: 0,
+            expected_out: 51,
         }
         .run()
     }
