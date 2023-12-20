@@ -206,7 +206,7 @@ impl Solver {
         }
     }
 
-    fn soft_reset_dijkstra(&mut self) {
+    fn _soft_reset_dijkstra(&mut self) {
         self.dijkstra_map[(0, 0)].min_heat_loss = 0;
         for i in 0..self.width() * self.height() {
             let entry = self.dijkstra_map.get_mut_row_major(i).unwrap();

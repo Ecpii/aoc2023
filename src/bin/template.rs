@@ -18,12 +18,11 @@ fn main() {
 }
 
 fn part1(contents: String) -> isize {
-    let lines = contents.split('\n').take_while(|x| !x.is_empty());
-    let mut res = 0;
-    res
+    let _lines = contents.split('\n').take_while(|x| !x.is_empty());
+    0
 }
 
-fn part2(contents: String) -> isize {
+fn part2(_contents: String) -> isize {
     0
 }
 
