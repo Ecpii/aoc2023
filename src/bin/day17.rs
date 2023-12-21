@@ -1,7 +1,7 @@
 use colored::Colorize;
 use std::{
     cmp::{Ordering, Reverse},
-    collections::BinaryHeap,
+    collections::{BinaryHeap, HashMap, VecDeque},
     time::Instant,
 };
 
@@ -23,7 +23,7 @@ fn main() {
     println!("part 2 took {:?}", duration2);
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Coord {
     pub y: usize,
     pub x: usize,
@@ -73,6 +73,16 @@ pub enum Direction {
     South,
     East,
 }
+impl Direction {
+    pub fn opposite(&self) -> Self {
+        match *self {
+            Direction::North => Direction::South,
+            Direction::West => Direction::East,
+            Direction::South => Direction::North,
+            Direction::East => Direction::West,
+        }
+    }
+}
 
 impl From<Direction> for char {
     fn from(val: Direction) -> Self {
@@ -112,6 +122,19 @@ struct Solver {
     map: Array2D<u8>,
     dijkstra_map: Array2D<DijkstraEntry>,
     closest_cities: BinaryHeap<Reverse<DistPair>>,
+}
+
+struct SearchStackFrame {
+    position: Coord,
+    restrictive_direction: Direction,
+    direction_ttl: usize,
+    total_loss: usize,
+}
+
+#[derive(Hash, Eq, PartialEq)]
+struct PartialSearchStackFrame {
+    position: Coord,
+    restrictive_direction: Direction,
 }
 
 impl Solver {
@@ -177,11 +200,9 @@ impl Solver {
 
             for neighbor_coord in coord.cardinal_neighbors() {
                 let Some(&heat_loss) = self.get(&neighbor_coord) else {
-                    println!();
                     continue;
                 };
                 if self.is_illegal_movement(coord, neighbor_coord) {
-                    println!();
                     continue;
                 }
 
@@ -217,15 +238,91 @@ impl Solver {
             coord: Coord { x: 0, y: 0 },
         }));
     }
+
+    fn search_with_bound(&mut self) -> isize {
+        let mut upper_bound =
+            self.dijkstra_map[(self.height() - 1, self.width() - 1)].min_heat_loss;
+        let end_coord = Coord {
+            y: self.height() - 1,
+            x: self.width() - 1,
+        };
+        let mut positions_to_scan: VecDeque<SearchStackFrame> = VecDeque::new();
+        positions_to_scan.push_back(SearchStackFrame {
+            position: Coord { x: 0, y: 0 },
+            restrictive_direction: Direction::South,
+            direction_ttl: 4,
+            total_loss: 0,
+        });
+        let mut positions_seen: HashMap<PartialSearchStackFrame, (usize, usize)> = HashMap::new();
+
+        while let Some(SearchStackFrame {
+            position,
+            restrictive_direction,
+            direction_ttl,
+            total_loss,
+        }) = positions_to_scan.pop_front()
+        {
+            // println!("{}", total_loss);
+            for neighbor in position.cardinal_neighbors() {
+                let Some(&heat_loss) = self.get(&neighbor) else {
+                    continue;
+                };
+                let new_direction = position.direction_to(&neighbor);
+                let new_ttl = if new_direction == restrictive_direction {
+                    direction_ttl - 1
+                } else {
+                    3
+                };
+                let new_loss = total_loss + (heat_loss as usize);
+
+                if new_direction == restrictive_direction.opposite()
+                    || new_ttl == 0
+                    || new_loss >= upper_bound
+                {
+                    continue;
+                }
+
+                if neighbor == end_coord {
+                    upper_bound = new_loss;
+                    break;
+                }
+
+                if let Some((past_ttl, past_loss)) = positions_seen.get(&PartialSearchStackFrame {
+                    position: neighbor,
+                    restrictive_direction: new_direction,
+                }) {
+                    if new_ttl <= *past_ttl && new_loss >= *past_loss {
+                        continue;
+                    }
+                }
+
+                positions_seen.insert(
+                    PartialSearchStackFrame {
+                        position: neighbor,
+                        restrictive_direction: new_direction,
+                    },
+                    (new_ttl, new_loss),
+                );
+                positions_to_scan.push_back(SearchStackFrame {
+                    position: neighbor,
+                    restrictive_direction: new_direction,
+                    direction_ttl: new_ttl,
+                    total_loss: new_loss,
+                })
+            }
+        }
+        upper_bound as isize
+    }
     fn run(&mut self) -> isize {
         self.run_dijkstra();
-        self.highlight_path();
-        // self.soft_reset_dijkstra();
-        // self.run_dijkstra();
         // self.highlight_path();
-        self.dijkstra_map[(self.height() - 1, self.width() - 1)].min_heat_loss as isize
+        // println!(
+        //     "{}",
+        //     self.dijkstra_map[(self.height() - 1, self.width() - 1)].min_heat_loss
+        // );
+        self.search_with_bound()
     }
-    fn highlight_path(&self) {
+    fn _highlight_path(&self) {
         let mut map = Array2D::from_iter_row_major(
             self.map
                 .elements_row_major_iter()

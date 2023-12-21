@@ -254,7 +254,7 @@ impl Lagoon {
         self.wall_colors.len()
     }
 
-    pub fn pretty_print(&self) {
+    pub fn _pretty_print(&self) {
         for y in self.min_y..self.max_y + 1 {
             for x in self.min_x..self.max_x + 1 {
                 let coord = Coord { x, y };
