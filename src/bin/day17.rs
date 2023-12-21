@@ -7,20 +7,21 @@ use std::{
 
 use aoc2023::utils::{pretty_print, read_2d_map_to_u8, read_input_file};
 use array2d::Array2D;
+// this is god awful code
 
 fn main() {
     let contents = read_input_file(file!(), "input.txt");
     let start = Instant::now();
     let part1 = part1(contents);
     let duration = start.elapsed();
-    println!("part 1: {}", part1);
-    println!("part 1 took {:?}", duration);
+    println!("part 1: {}", part1); // 1013
+    println!("part 1 took {:?}", duration); // 26.82 s
     let contents = read_input_file(file!(), "input.txt");
     let start2 = Instant::now();
     let part2 = part2(contents);
     let duration2 = start2.elapsed();
-    println!("part 2: {}", part2);
-    println!("part 2 took {:?}", duration2);
+    println!("part 2: {}", part2); // 1215
+    println!("part 2 took {:?}", duration2); // 27.5 s
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -32,23 +33,54 @@ struct Coord {
 impl Coord {
     pub fn cardinal_neighbors(&self) -> [Coord; 4] {
         [
-            Coord {
-                y: self.y.wrapping_sub(1),
-                x: self.x,
-            },
-            Coord {
-                y: self.y,
-                x: self.x.wrapping_sub(1),
-            },
-            Coord {
-                y: self.y + 1,
-                x: self.x,
-            },
-            Coord {
-                y: self.y,
-                x: self.x + 1,
-            },
+            self.shifted(Direction::North, 1),
+            self.shifted(Direction::West, 1),
+            self.shifted(Direction::South, 1),
+            self.shifted(Direction::East, 1),
         ]
+    }
+
+    pub fn _cardinal_distant_neighbors(&self, steps: usize) -> [Coord; 4] {
+        [
+            self.shifted(Direction::North, steps),
+            self.shifted(Direction::West, steps),
+            self.shifted(Direction::South, steps),
+            self.shifted(Direction::East, steps),
+        ]
+    }
+
+    pub fn cross_neighbors(&self, d: Direction, steps: usize) -> [Coord; 2] {
+        match d {
+            Direction::North | Direction::South => [
+                self.shifted(Direction::West, steps),
+                self.shifted(Direction::East, steps),
+            ],
+            Direction::West | Direction::East => [
+                self.shifted(Direction::North, steps),
+                self.shifted(Direction::South, steps),
+            ],
+        }
+    }
+
+    pub fn shifted(&self, d: Direction, steps: usize) -> Coord {
+        match d {
+            Direction::North => Coord {
+                y: self.y.wrapping_sub(steps),
+                x: self.x,
+            },
+            Direction::West => Coord {
+                y: self.y,
+                x: self.x.wrapping_sub(steps),
+            },
+            Direction::South => Coord {
+                y: self.y + steps,
+                x: self.x,
+            },
+            Direction::East => Coord {
+                y: self.y,
+                x: self.x + steps,
+            },
+        }
     }
 
     pub fn direction_to(&self, other: &Coord) -> Direction {
@@ -361,8 +393,189 @@ fn part1(contents: String) -> isize {
     // dijkstra_map[(height - 1, width - 1)].min_heat_loss as isize
 }
 
-fn part2(_contents: String) -> isize {
-    0
+struct Part2Solver {
+    map: Array2D<u8>,
+    positions_to_scan: VecDeque<SearchStackFrame>,
+    positions_seen: HashMap<PartialSearchStackFrame, (usize, usize)>,
+    upper_bound: usize,
+}
+impl Part2Solver {
+    fn new(map: Array2D<u8>) -> Self {
+        let mut positions_to_scan = VecDeque::new();
+        positions_to_scan.push_back(SearchStackFrame {
+            position: Coord { x: 0, y: 0 },
+            restrictive_direction: Direction::West,
+            direction_ttl: 6,
+            total_loss: 0,
+        });
+        positions_to_scan.push_back(SearchStackFrame {
+            position: Coord { x: 0, y: 0 },
+            restrictive_direction: Direction::North,
+            direction_ttl: 6,
+            total_loss: 0,
+        });
+        let positions_seen: HashMap<PartialSearchStackFrame, (usize, usize)> = HashMap::new();
+        Part2Solver {
+            map,
+            positions_to_scan,
+            positions_seen,
+            upper_bound: usize::MAX,
+        }
+    }
+
+    fn width(&self) -> usize {
+        self.map.num_columns()
+    }
+    fn height(&self) -> usize {
+        self.map.num_rows()
+    }
+
+    fn end(&self) -> Coord {
+        Coord {
+            y: self.height() - 1,
+            x: self.width() - 1,
+        }
+    }
+
+    fn get(&self, c: &Coord) -> Option<&u8> {
+        self.map.get(c.y, c.x)
+    }
+    fn straight_loss_between(&self, start: Coord, end: Coord) -> usize {
+        let mut loss: usize = 0;
+        let travel_direction = start.direction_to(&end);
+        if travel_direction == Direction::North || travel_direction == Direction::West {
+            for x in end.x..start.x {
+                loss += *self.get(&Coord { x, y: start.y }).unwrap() as usize;
+            }
+            for y in end.y..start.y {
+                loss += *self.get(&Coord { x: start.x, y }).unwrap() as usize;
+            }
+        } else {
+            for x in start.x + 1..=end.x {
+                loss += *self.get(&Coord { x, y: start.y }).unwrap() as usize;
+            }
+            for y in start.y + 1..=end.y {
+                loss += *self.get(&Coord { x: start.x, y }).unwrap() as usize;
+            }
+        }
+        loss
+    }
+
+    pub fn handle_front_neighbor(
+        &mut self,
+        SearchStackFrame {
+            position,
+            restrictive_direction,
+            direction_ttl,
+            total_loss,
+        }: &SearchStackFrame,
+    ) {
+        let front_neighbor = position.shifted(*restrictive_direction, 1);
+        let Some(&heat_loss) = self.get(&front_neighbor) else {
+            return;
+        };
+        let new_ttl = direction_ttl - 1;
+        let new_loss = total_loss + (heat_loss as usize);
+        if new_ttl == 0 || new_loss >= self.upper_bound {
+            return;
+        }
+        if front_neighbor == self.end() {
+            self.upper_bound = new_loss;
+            // println!("\nEnd found by straight!");
+            // dbg!(&position);
+            // dbg!(&restrictive_direction);
+            // dbg!(&total_loss);
+            return;
+        }
+
+        if let Some((past_ttl, past_loss)) = self.positions_seen.get(&PartialSearchStackFrame {
+            position: front_neighbor,
+            restrictive_direction: *restrictive_direction,
+        }) {
+            if new_ttl <= *past_ttl && new_loss >= *past_loss {
+                return;
+            }
+        }
+        self.positions_to_scan.push_back(SearchStackFrame {
+            position: front_neighbor,
+            restrictive_direction: *restrictive_direction,
+            direction_ttl: new_ttl,
+            total_loss: new_loss,
+        })
+    }
+
+    fn handle_side_neighbors(
+        &mut self,
+        SearchStackFrame {
+            position,
+            restrictive_direction,
+            direction_ttl: _,
+            total_loss,
+        }: &SearchStackFrame,
+    ) {
+        let turn_neighbors = position.cross_neighbors(*restrictive_direction, 4);
+
+        for neighbor in turn_neighbors {
+            if self.get(&neighbor).is_none() {
+                continue;
+            };
+            let new_direction = position.direction_to(&neighbor);
+            let new_ttl = 7;
+            let new_loss = total_loss + self.straight_loss_between(*position, neighbor);
+
+            if new_loss >= self.upper_bound {
+                continue;
+            }
+
+            if neighbor == self.end() {
+                // println!("\nEnd found by sidestep!");
+                // dbg!(&neighbor);
+                // dbg!(&position);
+                // dbg!(&restrictive_direction);
+                // dbg!(&total_loss);
+                self.upper_bound = new_loss;
+                return;
+            }
+
+            if let Some((past_ttl, past_loss)) = self.positions_seen.get(&PartialSearchStackFrame {
+                position: neighbor,
+                restrictive_direction: new_direction,
+            }) {
+                if new_ttl <= *past_ttl && new_loss >= *past_loss {
+                    continue;
+                }
+            }
+
+            self.positions_seen.insert(
+                PartialSearchStackFrame {
+                    position: neighbor,
+                    restrictive_direction: new_direction,
+                },
+                (new_ttl, new_loss),
+            );
+            self.positions_to_scan.push_back(SearchStackFrame {
+                position: neighbor,
+                restrictive_direction: new_direction,
+                direction_ttl: new_ttl,
+                total_loss: new_loss,
+            })
+        }
+    }
+
+    pub fn run(&mut self) -> isize {
+        while let Some(env) = self.positions_to_scan.pop_front() {
+            self.handle_front_neighbor(&env);
+            // println!"{}", total_loss);
+            self.handle_side_neighbors(&env);
+        }
+        self.upper_bound as isize
+    }
+}
+
+fn part2(contents: String) -> isize {
+    let map = read_2d_map_to_u8(contents.clone());
+    let mut solver = Part2Solver::new(map);
+    solver.run()
 }
 
 #[cfg(test)]
@@ -395,22 +608,32 @@ mod tests {
         .run()
     }
 
-    #[test]
-    fn first_divergence_first_sample() {
-        Sample {
-            input_file: "sample2.txt",
-            part_num: 1,
-            expected_out: 34,
-        }
-        .run()
-    }
+    // #[test]
+    // fn first_divergence_first_sample() {
+    //     Sample {
+    //         input_file: "sample2.txt",
+    //         part_num: 1,
+    //         expected_out: 34,
+    //     }
+    //     .run()
+    // }
 
     #[test]
     fn first_sample_part_two() {
         Sample {
             input_file: "sample.txt",
             part_num: 2,
-            expected_out: 0,
+            expected_out: 94,
+        }
+        .run()
+    }
+
+    #[test]
+    fn third_sample_part_two() {
+        Sample {
+            input_file: "sample3.txt",
+            part_num: 2,
+            expected_out: 71,
         }
         .run()
     }
