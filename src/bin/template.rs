@@ -28,6 +28,8 @@ fn part2(_contents: String) -> isize {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
     use crate::{part1, part2, read_input_file};
     struct Sample {
         pub input_file: &'static str,
@@ -37,11 +39,14 @@ mod tests {
     impl Sample {
         pub fn run(&self) {
             let contents = read_input_file(file!(), self.input_file);
+            let start = Instant::now();
             let res = if self.part_num == 1 {
                 part1(contents)
             } else {
                 part2(contents)
             };
+            let duration = start.elapsed();
+            println!("test took {:?}", duration);
             assert_eq!(res, self.expected_out);
         }
     }

@@ -1,10 +1,11 @@
 use std::{
-    cmp::{max, min},
-    collections::{hash_map::Entry, HashMap},
+    cmp::{max, min, Ordering},
+    collections::{hash_map::Entry, BinaryHeap, HashMap, HashSet},
     time::Instant,
 };
 
 use aoc2023::utils::read_input_file;
+use itertools::Itertools;
 
 fn main() {
     let contents = read_input_file(file!(), "input.txt");
@@ -55,6 +56,17 @@ impl Coord {
             },
         }
     }
+
+    pub fn shifted(&self, direction: Direction, steps: usize) -> Coord {
+        let mut dest = *self;
+        match direction {
+            Direction::North => dest.y -= steps as isize,
+            Direction::West => dest.x -= steps as isize,
+            Direction::South => dest.y += steps as isize,
+            Direction::East => dest.x += steps as isize,
+        }
+        dest
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -95,6 +107,15 @@ impl Direction {
     pub fn _perpendicular_to(&self, other: &Direction) -> bool {
         (self.is_vertical() && !other.is_vertical()) || (!self.is_vertical() && other.is_vertical())
     }
+
+    pub fn opposite(&self) -> Direction {
+        match *self {
+            Direction::North => Direction::South,
+            Direction::West => Direction::East,
+            Direction::South => Direction::North,
+            Direction::East => Direction::West,
+        }
+    }
 }
 
 impl From<&str> for Direction {
@@ -105,6 +126,17 @@ impl From<&str> for Direction {
             'D' => Self::South,
             'R' => Self::East,
             _ => panic!("invalid string provided for direction"),
+        }
+    }
+}
+impl From<char> for Direction {
+    fn from(value: char) -> Self {
+        match value {
+            '3' => Self::North,
+            '2' => Self::West,
+            '1' => Self::South,
+            '0' => Self::East,
+            _ => panic!("invalid char provided for direction"),
         }
     }
 }
@@ -237,17 +269,239 @@ impl Lagoon {
     }
 }
 
-fn part1(contents: String) -> isize {
+fn part1(contents: String) -> usize {
     let mut lagoon = Lagoon::from_str(contents);
-    lagoon.pretty_print();
+    // lagoon.pretty_print();
     lagoon.dig_inside();
-    println!();
-    lagoon.pretty_print();
-    lagoon.get_area() as isize
+    // println!();
+    // lagoon.pretty_print();
+    lagoon.get_area()
 }
 
-fn part2(_contents: String) -> isize {
-    0
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum Corner {
+    Northwest,
+    Northeast,
+    Southwest,
+    Southeast,
+}
+
+impl Corner {
+    pub fn from_directions(first: Direction, second: Direction) -> Self {
+        let (vertical, horizontal) = if first.is_vertical() {
+            (first.opposite(), second)
+        } else {
+            (second, first.opposite())
+        };
+        if vertical == Direction::North {
+            if horizontal == Direction::West {
+                Corner::Northwest
+            } else {
+                Corner::Northeast
+            }
+        } else if horizontal == Direction::West {
+            Corner::Southwest
+        } else {
+            Corner::Southeast
+        }
+    }
+
+    pub fn faces(&self, d: Direction) -> bool {
+        match d {
+            Direction::North => *self == Corner::Northwest || *self == Corner::Northeast,
+            Direction::West => *self == Corner::Northwest || *self == Corner::Southwest,
+            Direction::South => *self == Corner::Southwest || *self == Corner::Southeast,
+            Direction::East => *self == Corner::Northeast || *self == Corner::Southeast,
+        }
+    }
+
+    pub fn is_bypassable_with(&self, other: Self) -> bool {
+        (self.faces(Direction::North) && other.faces(Direction::North))
+            || self.faces(Direction::South) && other.faces(Direction::South)
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+struct CornerPosition {
+    pub corner: Corner,
+    pub position: Coord,
+}
+
+impl Ord for CornerPosition {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let y_comp = self.position.y.cmp(&other.position.y);
+        match y_comp {
+            Ordering::Less => Ordering::Greater,
+            Ordering::Equal => match self.position.x.cmp(&other.position.x) {
+                Ordering::Less => Ordering::Greater,
+                Ordering::Equal => Ordering::Equal,
+                Ordering::Greater => Ordering::Less,
+            },
+            Ordering::Greater => Ordering::Less,
+        }
+    }
+}
+
+impl PartialOrd for CornerPosition {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Debug)]
+struct BigLagoon {
+    corners: BinaryHeap<CornerPosition>,
+    min_x: isize,
+    min_y: isize,
+}
+
+impl BigLagoon {
+    pub fn from_str(contents: String) -> Self {
+        let mut corners: BinaryHeap<CornerPosition> =
+            BinaryHeap::with_capacity(contents.chars().filter(|&x| x == '\n').count() + 1);
+        let lines = contents.split('\n').take_while(|x| !x.is_empty());
+        let mut position = Coord { x: 0, y: 0 };
+        let mut min_x = isize::MAX;
+        let mut min_y = isize::MAX;
+        let mut last_direction = lines
+            .clone()
+            .last()
+            .unwrap()
+            .chars()
+            .take_while(|&x| x != ')')
+            .last()
+            .unwrap()
+            .into();
+        for line in lines {
+            let hex_code = &line.split(' ').nth(2).unwrap()[2..8];
+            let steps = usize::from_str_radix(&hex_code[..5], 16).unwrap();
+            let direction: Direction = hex_code.chars().last().unwrap().into();
+            corners.push(CornerPosition {
+                position,
+                corner: Corner::from_directions(last_direction, direction),
+            });
+
+            min_x = min(position.x, min_x);
+            min_y = min(position.y, min_y);
+            let destination = position.shifted(direction, steps);
+            position = destination;
+            last_direction = direction;
+        }
+
+        BigLagoon {
+            corners,
+            min_x,
+            min_y,
+        }
+    }
+
+    fn get_cornerless_line_area(&self, current_vertical_lines: &[isize]) -> usize {
+        let mut area = 0;
+        let mut x = self.min_x - 1;
+        let mut is_inside = false;
+        for &new_x in current_vertical_lines {
+            if is_inside {
+                area += (new_x - x - 1) as usize;
+            }
+            area += 1;
+            is_inside = !is_inside;
+            x = new_x;
+        }
+        area
+    }
+
+    fn get_line_area(
+        &self,
+        current_vertical_lines: &[isize],
+        corners_seen: &[CornerPosition],
+    ) -> usize {
+        let mut area: usize = 0;
+        let x_bounds = corners_seen
+            .iter()
+            .map(|CornerPosition { position, .. }| &position.x)
+            .merge(current_vertical_lines.iter());
+        let mut seen_x_bounds = HashSet::new();
+        let mut x = self.min_x - 1;
+        let mut is_inside = false;
+        let mut last_seen_corner: Option<Corner> = None;
+        for &new_x in x_bounds {
+            if seen_x_bounds.contains(&new_x) {
+                continue;
+            }
+            if is_inside || last_seen_corner.is_some() {
+                area += usize::try_from(new_x - x - 1).expect("uh oh"); // exclusive area between points
+            }
+            area += 1; // a poi is on a dug out point
+
+            if let Ok(new_corner_index) =
+                corners_seen.binary_search_by(|corner_pos| corner_pos.position.x.cmp(&new_x))
+            {
+                // encounter a corner
+                let new_corner = &corners_seen[new_corner_index];
+                if let Some(old_corner) = last_seen_corner {
+                    if !old_corner.is_bypassable_with(new_corner.corner) {
+                        is_inside = !is_inside;
+                    }
+                    last_seen_corner = None;
+                } else {
+                    last_seen_corner = Some(new_corner.corner);
+                };
+            } else {
+                // encounter a regular vertical line
+                is_inside = !is_inside;
+            }
+            seen_x_bounds.insert(new_x);
+            x = new_x;
+        }
+
+        area
+    }
+
+    pub fn get_area(&mut self) -> usize {
+        let mut y = self.min_y;
+        let mut current_vertical_lines: Vec<isize> = Vec::new();
+        let mut corners_seen: Vec<CornerPosition> = Vec::new();
+        let mut area: usize = 0;
+        while let Some(new_corner) = self.corners.pop() {
+            let Coord { y: new_y, x: new_x } = new_corner.position;
+            let corner = new_corner.corner;
+            if new_y != y {
+                // manually calculate area at y
+                let line_area = self.get_line_area(&current_vertical_lines, &corners_seen);
+                area += line_area;
+
+                // add to total area the area bounded by vertical lines * height diff
+                let cornerless_area = self.get_cornerless_line_area(&current_vertical_lines)
+                    * ((new_y - y - 1) as usize);
+                area += cornerless_area;
+
+                y = new_y;
+                corners_seen.clear();
+            }
+            if corner.faces(Direction::North) {
+                current_vertical_lines.remove(
+                    current_vertical_lines
+                        .iter()
+                        .position(|&x| x == new_x)
+                        .unwrap(),
+                );
+            } else if corner.faces(Direction::South) {
+                let insert_pos = current_vertical_lines
+                    .binary_search(&new_x)
+                    .unwrap_or_else(|p| p);
+                current_vertical_lines.insert(insert_pos, new_x);
+            }
+            corners_seen.push(new_corner);
+        }
+        area += self.get_line_area(&current_vertical_lines, &corners_seen);
+
+        area
+    }
+}
+
+fn part2(contents: String) -> usize {
+    let mut big_lagoon = BigLagoon::from_str(contents);
+    big_lagoon.get_area()
 }
 
 #[cfg(test)]
@@ -256,7 +510,7 @@ mod tests {
     struct Sample {
         pub input_file: &'static str,
         pub part_num: u8,
-        pub expected_out: isize,
+        pub expected_out: usize,
     }
     impl Sample {
         pub fn run(&self) {
@@ -285,7 +539,7 @@ mod tests {
         Sample {
             input_file: "sample.txt",
             part_num: 2,
-            expected_out: 0,
+            expected_out: 952408144115,
         }
         .run()
     }
