@@ -17,12 +17,12 @@ fn main() {
     println!("part 2 took {:?}", duration2);
 }
 
-fn part1(contents: String) -> isize {
+fn part1(contents: String) -> usize {
     let _lines = contents.split('\n').take_while(|x| !x.is_empty());
     0
 }
 
-fn part2(_contents: String) -> isize {
+fn part2(_contents: String) -> usize {
     0
 }
 
@@ -34,7 +34,7 @@ mod tests {
     struct Sample {
         pub input_file: &'static str,
         pub part_num: u8,
-        pub expected_out: isize,
+        pub expected_out: usize,
     }
     impl Sample {
         pub fn run(&self) {
