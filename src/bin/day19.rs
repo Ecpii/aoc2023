@@ -1,4 +1,8 @@
-use std::{collections::HashMap, time::Instant};
+use std::{
+    cmp::{max, min},
+    collections::HashMap,
+    time::Instant,
+};
 
 use aoc2023::utils::read_input_file;
 
@@ -17,6 +21,7 @@ fn main() {
     println!("part 2 took {:?}", duration2);
 }
 
+static ATTR_NAMES: [char; 4] = ['x', 'm', 'a', 's'];
 #[derive(Copy, Clone)]
 struct MachinePart {
     attribute_values: [usize; 4],
@@ -38,17 +43,63 @@ impl MachinePart {
     }
 
     pub fn get_attribute(&self, attribute: char) -> usize {
-        match attribute {
-            'x' => self.attribute_values[0],
-            'm' => self.attribute_values[1],
-            'a' => self.attribute_values[2],
-            's' => self.attribute_values[3],
-            _ => panic!("get attribute called with illegal char"),
-        }
+        let attribute_index = ATTR_NAMES.iter().position(|&x| x == attribute).unwrap();
+        self.attribute_values[attribute_index]
     }
 
     pub fn get_score(&self) -> usize {
         self.attribute_values.iter().sum()
+    }
+}
+
+#[derive(Copy, Clone)]
+struct MachinePartRange {
+    attribute_ranges: [(usize, usize); 4],
+}
+
+impl MachinePartRange {
+    pub fn new() -> Self {
+        MachinePartRange {
+            attribute_ranges: [(1, 4000); 4],
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        self.attribute_ranges
+            .iter()
+            .map(|(start, end)| (end + 1).saturating_sub(*start))
+            .product()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.size() == 0
+    }
+
+    pub fn split_by(&self, condition: &Condition) -> (Self, Self) {
+        let attribute_index = ATTR_NAMES
+            .iter()
+            .position(|&x| x == condition.attribute)
+            .unwrap();
+        let (start, end) = self.attribute_ranges[attribute_index];
+        if condition.operation == '>' {
+            let new_start = max(start, condition.value + 1);
+            (
+                self.with(attribute_index, (new_start, end)),
+                self.with(attribute_index, (start, new_start - 1)),
+            )
+        } else {
+            let new_end = min(end, condition.value - 1);
+            (
+                self.with(attribute_index, (start, new_end)),
+                self.with(attribute_index, (new_end + 1, end)),
+            )
+        }
+    }
+
+    fn with(&self, attribute_index: usize, new_range: (usize, usize)) -> MachinePartRange {
+        let mut res = *self;
+        res.attribute_ranges[attribute_index] = new_range;
+        res
     }
 }
 
@@ -115,20 +166,10 @@ impl Workflow {
         }
         unreachable!()
     }
-
-    fn get_attribute_bounds(&self, attribute: char) -> impl Iterator<Item = usize> + '_ {
-        self.conditions
-            .iter()
-            .filter(move |cond| cond.attribute == attribute && cond.value != 0)
-            .map(|cond| cond.value)
-    }
 }
-
-static ATTR_NAMES: [char; 4] = ['x', 'm', 'a', 's'];
 
 struct ElfSortingSystem {
     workflows: HashMap<String, Workflow>,
-    attribute_bounds: HashMap<char, Vec<usize>>,
 }
 
 impl ElfSortingSystem {
@@ -141,11 +182,7 @@ impl ElfSortingSystem {
             let value = Workflow::from_str(&line[brace_position + 1..line.len() - 1]);
             workflows.insert(key.to_owned(), value);
         }
-        let attribute_bounds: HashMap<char, Vec<usize>> = HashMap::with_capacity(4);
-        ElfSortingSystem {
-            workflows,
-            attribute_bounds,
-        }
+        ElfSortingSystem { workflows }
     }
 
     pub fn check_part(&self, part: &MachinePart) -> bool {
@@ -157,54 +194,22 @@ impl ElfSortingSystem {
         current_workflow_name == "A"
     }
 
-    fn get_configuration_count(&self, partial_part: &MachinePart) -> usize {
-        println!("{:?}", partial_part.attribute_values[0]);
-        let Some(attribute_index) = partial_part
-            .attribute_values
-            .iter()
-            .position(|&value| value == 0)
-        else {
-            return if self.check_part(partial_part) { 1 } else { 0 };
-        };
+    pub fn traverse_count(&self, workflow_name: &str, range: MachinePartRange) -> usize {
+        if range.is_empty() || workflow_name == "R" {
+            return 0;
+        }
+        if workflow_name == "A" {
+            return range.size();
+        }
+        let workflow = self.workflows.get(workflow_name).unwrap();
+        let mut current_range = range;
         let mut count = 0;
-        let attribute_name = ATTR_NAMES[attribute_index];
-        let mut last_attribute_value = 0;
-        for attribute_bound in self.attribute_bounds.get(&attribute_name).unwrap() {
-            let mut new_machine_part = *partial_part;
-            new_machine_part.attribute_values[attribute_index] = *attribute_bound;
-            count += self.get_configuration_count(&new_machine_part);
-
-            let inner_attribute_value = attribute_bound - 1;
-            if inner_attribute_value != last_attribute_value {
-                let interval_width = inner_attribute_value - last_attribute_value;
-                new_machine_part.attribute_values[attribute_index] = inner_attribute_value;
-                count += self.get_configuration_count(&new_machine_part) * interval_width;
-            }
-            last_attribute_value = *attribute_bound;
+        for condition in workflow.conditions.iter() {
+            let (split_range, new_range) = current_range.split_by(condition);
+            count += self.traverse_count(&condition.destination, split_range);
+            current_range = new_range;
         }
-
         count
-    }
-
-    pub fn merge_count(&mut self) -> usize {
-        let workflow_vec: Vec<_> = self.workflows.values().collect();
-        // dbg!(&workflow_vec);
-        for attribute_name in ATTR_NAMES {
-            let mut bounds: Vec<_> = workflow_vec
-                .iter()
-                .flat_map(|wkflw| wkflw.get_attribute_bounds(attribute_name))
-                .filter(|&x| x != 0)
-                .collect();
-            bounds.sort_unstable();
-            bounds.push(4000);
-            bounds.dedup_by_key(|x| *x);
-            self.attribute_bounds.insert(attribute_name, bounds);
-        }
-
-        dbg!(&self.attribute_bounds);
-        self.get_configuration_count(&MachinePart {
-            attribute_values: [0, 0, 0, 0],
-        })
     }
 }
 
@@ -225,8 +230,8 @@ fn part1(contents: String) -> usize {
 
 fn part2(contents: String) -> usize {
     let state_descriptions = contents.split("\n\n").next().unwrap();
-    let mut system = ElfSortingSystem::from_str(state_descriptions);
-    system.merge_count()
+    let system = ElfSortingSystem::from_str(state_descriptions);
+    system.traverse_count("in", MachinePartRange::new())
 }
 
 #[cfg(test)]
